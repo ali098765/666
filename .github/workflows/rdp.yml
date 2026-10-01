@@ -18,11 +18,21 @@ jobs:
           sudo systemctl enable xrdp
           sudo systemctl start xrdp
 
-      - name: Create System User
+      - name: Create System User and Fix Session
         run: |
           sudo useradd -m -s /bin/bash rdpuser
           echo "rdpuser:Password123!" | sudo chpasswd
-          sudo usermod -aG sudo rdpuser
+          sudo usermod -aG sudo,adm,cdrom,sudo,dip,plugdev rdpuser
+          
+          # إصلاح مشكلة جلسة الفيفسيل والوافجة الرسومية جذرياً
+          echo "xfce4-session" > /home/rdpuser/.xsession
+          sudo chown rdpuser:rdpuser /home/rdpuser/.xsession
+          sudo chmod +x /home/rdpuser/.xsession
+          
+          # إعداد ملفات بدء تشغيل xrdp لمنع أي خطأ في الجلسة
+          echo "startxfce4" | sudo tee /etc/xrdp/startwm.sh > /dev/null
+          sudo chmod +x /etc/xrdp/startwm.sh
+          
           echo "RDP_CREDS=User: rdpuser | Password: Password123!" >> $GITHUB_ENV
 
       - name: Install Tailscale
@@ -65,4 +75,3 @@ jobs:
               date
               sleep 300
           done
-          
