@@ -1,0 +1,68 @@
+name: RDP-Linux
+
+on:
+  workflow_dispatch:
+
+jobs:
+  linux-rdp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3600
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Update and Install Desktop Environment & RDP
+        run: |
+          sudo apt update
+          sudo DEBIAN_FRONTEND=noninteractive apt install -y xfce4 xfce4-goodies xrdp
+          sudo systemctl enable xrdp
+          sudo systemctl start xrdp
+
+      - name: Create System User
+        run: |
+          sudo useradd -m -s /bin/bash rdpuser
+          echo "rdpuser:Password123!" | sudo chpasswd
+          sudo usermod -aG sudo rdpuser
+          echo "RDP_CREDS=User: rdpuser | Password: Password123!" >> $GITHUB_ENV
+
+      - name: Install Tailscale
+        run: |
+          curl -fsSL https://tailscale.com/install.sh | sh
+
+      - name: Establish Tailscale Connection
+        run: |
+          sudo tailscale up --authkey=${{ secrets.TAILSCALE_AUTH_KEY }} --hostname=gh-linux-runner-$GITHUB_RUN_ID
+          
+          TS_IP=""
+          RETRIES=0
+          while [ -z "$TS_IP" ] && [ $RETRIES -lt 10 ]; do
+              TS_IP=$(tailscale ip -4)
+              sleep 5
+              RETRIES=$((RETRIES+1))
+          done
+          
+          if [ -z "$TS_IP" ]; then
+              echo "Error: Tailscale IP not assigned."
+              exit 1
+          fi
+          
+          echo "TAILSCALE_IP=$TS_IP" >> $GITHUB_ENV
+
+      - name: Verify RDP Port
+        run: |
+          echo "Tailscale IP: $TAILSCALE_IP"
+          nc -zv $TAILSCALE_IP 3389 || echo "Port check finished"
+
+      - name: Maintain Connection
+        run: |
+          echo "=== LINUX RDP ACCESS ==="
+          echo "Address: $TAILSCALE_IP"
+          echo "Username: rdpuser"
+          echo "Password: Password123!"
+          echo "========================"
+          
+          while true; do
+              date
+              sleep 300
+          done
+          
